@@ -96,11 +96,9 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         self.model = stn_dict.get('model', 'MS-120')
         loginf("model is %s" % self.model)
         port = stn_dict.get('port', CM1Station.DEFAULT_PORT)
-        loginf("port is %s" % port)
         address = int(stn_dict.get('address', CM1Station.DEFAULT_ADDRESS))
         loginf("address is %s" % address)
         baud_rate = int(stn_dict.get('baud_rate', CM1Station.DEFAULT_BAUD))
-        loginf("baud_rate is %s" % baud_rate)
         self.poll_interval = int(stn_dict.get('poll_interval', 10))
         loginf("poll interval is %s" % self.poll_interval)
         self.sensor_map = stn_dict.get('sensor_map', CM1Driver.DEFAULT_MAP)
@@ -156,24 +154,31 @@ class CM1Station(minimalmodbus.Instrument):
         'battery_voltage', 'solar_charge_voltage', 'charger_status']
 
     SENSORS = {
-        'wind_status': ('register', 200), # -1 to 15; -1=none
-        'wind_speed': ('register', 201, 0.1), # 0-500 m/s
-        'wind_dir': ('register', 202, 0.1), # 0-3599
-        'wind_speed_2min': ('register', 203, 0.1), # 0-500 m/s
-        'wind_dir_2min': ('register', 204, 0.1), # 0-3599
-        'wind_speed_10min': ('register', 205, 0.1), # 0-500 m/s
-        'wind_dir_10min': ('register', 206, 0.1), # 0-3599
-        'wind_gust_speed': ('register', 207, 0.1), # 0-500 m/s
-        'wind_gust_dir': ('register', 208, 0.1), # 0-3599
-        'tph_status': ('register', 220), # -1 to 3; -1=none
-        'temperature': ('register', 221, 0.1), # -400-1250 C
-        'humidity': ('register', 222, 0.1), # %
-        'pressure': ('register', 223, 0.1), # mbar
-        'pressure_trend': ('register', 224), # -2, -1, 0, 1, 2
+        'wind_status': ('register', 200, 1.0, None), # -1 to 15; -1=none
+        'wind_speed': ('register', 201, 0.1, None), # 0-500 m/s
+        'wind_dir': ('register', 202, 0.1, None), # 0-3599
+        'wind_speed_2min': ('register', 203, 0.1, None), # 0-500 m/s
+        'wind_dir_2min': ('register', 204, 0.1, None), # 0-3599
+        'wind_speed_10min': ('register', 205, 0.1, None), # 0-500 m/s
+        'wind_dir_10min': ('register', 206, 0.1, None), # 0-3599
+        'wind_gust_speed': ('register', 207, 0.1, None), # 0-500 m/s
+        'wind_gust_dir': ('register', 208, 0.1, None), # 0-3599
+        'tph_status': ('register', 220, 1.0, None), # -1 to 3; -1=none
+        'temperature': ('register', 221, 0.1, None), # -400-1250 C
+        'humidity': ('register', 222, 0.1, None), # 0-1000 %
+        'pressure': ('register', 223, 0.1, None), # 0-13100 mbar
+        'pressure_trend': ('register', 224, 1, None), # -2, -1, 0, 1, 2
         # why is there a second temperature at 225?
-        'rain_day_total': ('register', 242), # daily count
-        'rain_rate': ('register', 243, 0.1), # -400-1250 count/hour
-        }
+        'rain_day_total': ('register', 242, 1, None), # daily count
+        'rain_rate': ('register', 243, 0.1, None), # -400-1250 count/hour
+        'analog_1': ('float', 244, 1, None), # 32-bit float
+        'analog_2': ('float', 246, 1, None), # 32-bit float
+        'heatindex': ('register', 240, 0.1, -999), # -400-1250 C
+        'windchill': ('register', 241, 0.1, -999), # -400-1250 C
+        'dewpoint': ('register', 248, 0.1, -999), # -400-1250 C
+        'wetbulb': ('register', 249, 0.1, -999), # -400-1250 C
+        'lightning_status': ('register', 280, 1, None), # 0 to 3
+    }
 
     CHARGER_STATUS = {
         0: 'Off',
@@ -184,7 +189,11 @@ class CM1Station(minimalmodbus.Instrument):
     def __init__(self, port, address, baud_rate):
         minimalmodbus.BAUDRATE = baud_rate
         minimalmodbus.Instrument.__init__(self, port, address)
-
+        loginf("port: %s" % self.serial.port)
+        loginf("serial settings: %s:%s:%s:%s" % (
+            self.serial.baudrate, self.serial.bytesize,
+            self.serial.parity, self.serial.stopbits))
+        
     def __enter__(self):
         return self
 
@@ -194,7 +203,10 @@ class CM1Station(minimalmodbus.Instrument):
     def get_system_parameters(self):
         data = dict()
         for x in self.SYSTEM_PARAMETERS:
-            data[x] = self.get_parameter(x)
+            try:
+                data[x] = self.get_parameter(x)
+            except (IOError, ValueError), e:
+                logerr("parameter %s failed: %s" % (x, e))
         return data
 
     def get_current(self):
@@ -202,10 +214,11 @@ class CM1Station(minimalmodbus.Instrument):
         for x in self.SENSORS:
             func = self.SENSORS[x][0]
             reg = self.SENSORS[x][1]
-            mult = self.SENSORS[x][2] if len(self.SENSORS[x]) > 2 else 1.0
+            mult = self.SENSORS[x][2]
+            invalid = self.SENSORS[x][3]
             try:
-                data[x] = self.get_sensor(x, func, reg, mult)
-            except IOError, e:
+                data[x] = self.get_sensor(x, func, reg, mult, invalid)
+            except (IOError, ValueError), e:
                 logerr("sensor %s fail: %s" % (x, e))
         if data.get('wind_status') == -1:
             data['wind_speed'] = None
@@ -213,8 +226,12 @@ class CM1Station(minimalmodbus.Instrument):
             data['temperature'] = None
         return data
 
-    def get_sensor(self, label, func, reg, mult):
-        v = getattr(self, 'read_%s' % func)(reg) * mult
+    def get_sensor(self, label, func, reg, mult, invalid=None):
+        v = getattr(self, 'read_%s' % func)(reg)
+        if v == invalid:
+            v = None
+        else:
+            v *= mult
         logdbg("%s: %s" % (label, v))
         return v
 
@@ -230,21 +247,21 @@ class CM1Station(minimalmodbus.Instrument):
 
     def get_firmware_version(self):
         # 16-bits
-        return self.read_register(101, signed=False)
+        return self.read_register(101)
 
     def get_serial_number(self):
         # 32-bits
-        return self.read_long(102, signed=False)
+        return self.read_long(102)
 
     def get_time(self):
         # 32-bits
         # HHMMSS - bcd encoded
-        return "%06d" % self.read_long(104, signed=False)
+        return "%06d" % self.read_long(104)
 
     def get_date(self):
         # 32-bits
         # YYMMDD - bcd encoded
-        return "%06d" % self.read_long(106, signed=False)
+        return "%06d" % self.read_long(106)
 
     def get_epoch(self):
         # station is gmtime
@@ -260,10 +277,10 @@ class CM1Station(minimalmodbus.Instrument):
         tstr = time.gmtime(ts)
         v = (tstr.tm_year - 2000) * 10000 + tstr.tm_mon * 100 + tstr.tm_mday
         logdbg("set_epoch: date: %s" % v)
-        self.write_long(106, v, signed=False)
+        self.write_long(106, v)
         v = tstr.tm_hour * 10000 + tstr.tm_min * 100 + tstr.tm_sec
         logdbg("set_epoch: time: %s" % v)
-        self.write_long(104, v, signed=False)
+        self.write_long(104, v)
 
     def get_battery_voltage(self):
         # 16-bits
@@ -318,10 +335,11 @@ if __name__ == '__main__':
         station = CM1Station(options.port, options.address, options.baud_rate)
         if options.settime:
             station.set_epoch()
-        else:
-            data = station.get_system_parameters()
-            print "system parameters: ", data
-            data = station.get_current()
-            print "current values: ", data
+            exit(0)
+            
+        data = station.get_system_parameters()
+        print "system parameters: ", data
+        data = station.get_current()
+        print "current values: ", data
 
     main()
