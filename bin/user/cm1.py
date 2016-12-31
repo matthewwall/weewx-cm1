@@ -87,16 +87,18 @@ class CM1ConfEditor(weewx.drivers.AbstractConfEditor):
 class CM1Driver(weewx.drivers.AbstractDevice):
     # mapping from hardware names to database schema names
     DEFAULT_MAP = {
-        'outTemp': 'temperature_outside',
-        'inTemp': 'temperature_inside',
-        'outHumidity': 'humidity',
         'pressure': 'pressure',
+        'outTemp': 'temperature',
+        'outHumidity': 'humidity',
         'windSpeed': 'wind_speed',
         'windDir': 'wind_dir',
-        'windGust': 'gust_speed',
-        'windGustDir': 'gust_dir',
-        'rain': 'precipitation',
-        'radiation': 'solar_radiation'}
+        'windGust': 'wind_gust_speed',
+        'windGustDir': 'wind_gust_dir',
+        'rainRate': 'rain_rate',
+        'heatindex': 'heatindex',
+        'windchill': 'windchill',
+        'dewpoint': 'dewpoint',
+        'wetbulb': 'wetbulb'}
 
     def __init__(self, **stn_dict):
         self.model = stn_dict.get('model', 'MS-120')
@@ -108,8 +110,9 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         self.poll_interval = int(stn_dict.get('poll_interval', 10))
         loginf("poll interval is %s" % self.poll_interval)
         self.sensor_map = stn_dict.get('sensor_map', CM1Driver.DEFAULT_MAP)
+        loginf("sensor map: %s" % self.sensor_map)
         self.max_tries = int(stn_dict.get('max_tries', 3))
-        self.retry_wait = int(stn_dict.get('retry_wait', 5))
+        self.retry_wait = int(stn_dict.get('retry_wait', 2))
         self.station = CM1(port, address, baud_rate)
         params = self.station.get_system_parameters()
         for x in CM1.SYSTEM_PARAMETERS:
