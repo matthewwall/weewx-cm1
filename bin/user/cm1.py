@@ -20,11 +20,11 @@ a RS-485 slave for reading data (Modbus-RTU over RS-485).
 The CM1 has a data logger with capacity of 49,152 records, with logging
 intervals of 1, 2, 5, 10, 15, 20, 30, and 60 minutes.
 
-doc issues:
-- 14.4.4 - spurious row 225?
-- 14.4.8 - 259 should be 290
-- 14.4.8 - 0-3 system status does not match table of status values
-- 14.4.8 - units of energy?  32767 is not a long
+The CM1 emits the following Modbus errors:
+  01 - illegal function
+  02 - illegal address
+  03 - illegal data value
+  04 - device failure
 """
 
 import calendar
@@ -145,7 +145,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
                 yield packet
                 if self.poll_interval:
                     time.sleep(self.poll_interval)
-            except (IOError, ValueError), e:
+            except (IOError, ValueError, TypeError), e:
                 loginf("failed attempt %s of %s: %s" %
                        (ntries, self.max_tries, e))
                 time.sleep(self.retry_wait)
@@ -458,7 +458,10 @@ if __name__ == '__main__':
             station.set_epoch()
             exit(0)
 
-#        print station.read_register(200, functioncode=3, signed=True)
+#        print station.read_register(200, functioncode=4, signed=True)
+#        print station.read_register(200, functioncode=4, signed=False)
+#        print station.read_registers(201, 1, functioncode=4)
+
 #        print station.get_epoch()
 
         data = station.get_system_parameters()
