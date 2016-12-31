@@ -164,6 +164,10 @@ class CM1(minimalmodbus.Instrument):
     DEFAULT_ADDRESS = 1
     DEFAULT_BAUD_RATE = 19200
 
+    SYSTEM_PARAMETERS = ['serial_number', 'product_id', 'firmware_version',
+                         'date', 'time', 'battery_voltage', 'solar_voltage',
+                         'charger_status']
+
     CHARGER_STATUS = {
         0: 'Off',
         1: 'Fast', # current-limited
