@@ -181,7 +181,10 @@ class CM1(minimalmodbus.Instrument):
         loginf("serial settings: %s:%s:%s:%s" % (
             self.serial.baudrate, self.serial.bytesize,
             self.serial.parity, self.serial.stopbits))
-        
+        self.address = address
+#        self.master = modbus_rtu.RtuMaster(
+#            serial.Serial(port=port, baudrate=baud_rate))
+
     def __enter__(self):
         return self
 
@@ -209,9 +212,20 @@ class CM1(minimalmodbus.Instrument):
             return None
         return x * 0.1
 
+    def _read_registers(self, reg, cnt):
+        return self.read_registers(reg, cnt)
+#        return self.master.execute(self.address, cst.READ_HOLDING_REGISTERS, reg, cnt)
+
+    def _read_register(self, reg, places=0):
+        return self.read_register(reg, places)
+#        return self.master.execute(self.address, cst.READ_INPUT_REGISTERS, reg, 1)
+
+    def _read_long(self, reg):
+        return self.read_long(reg)
+
     def get_system_parameters(self):
         data = dict()
-        x = self.read_registers(100, 11)
+        x = self._read_registers(100, 11)
         data['product_id'] = CM1._to_signed(x[0])
         data['firmware_version'] = x[1]
         data['serial_number'] = CM1._to_long(x[2], x[3])
@@ -224,9 +238,9 @@ class CM1(minimalmodbus.Instrument):
 
     def get_current(self):
         data = dict()
-        x = self.read_registers(108, 3)
+        x = self._read_registers(108, 3)
         data.update(CM1._decode_power(x))
-        x = self.read_registers(200, 92)
+        x = self._read_registers(200, 92)
         data.update(CM1._decode_wind(x[0:9]))
         data.update(CM1._decode_tph(x[20:26]))
         data.update(CM1._decode_rain(x[42:44]))
@@ -237,7 +251,7 @@ class CM1(minimalmodbus.Instrument):
 
     def get_epoch(self):
         # station is gmtime
-        x = self.read_registers(104, 4)
+        x = self._read_registers(104, 4)
         ds = (x[2] << 16) + x[3]
         ts = (x[0] << 16) + x[1]
         dt = "20%06d.%06d" % (ds, ts)
@@ -261,27 +275,27 @@ class CM1(minimalmodbus.Instrument):
     def get_time(self):
         # 32-bits
         # HHMMSS - bcd encoded
-        return "%06d" % self.read_long(104)
+        return "%06d" % self._read_long(104)
 
     def get_date(self):
         # 32-bits
         # YYMMDD - bcd encoded
-        return "%06d" % self.read_long(106)
+        return "%06d" % self._read_long(106)
 
     def get_battery_voltage(self):
         # 16-bits
         # 0-50000 * 0.001
-        return self.read_register(108, 3)
+        return self._read_register(108, 3)
 
     def get_solar_charge_voltage(self):
         # 16-bits
         # 0-50000 * 0.001
-        return self.read_register(109, 3)
+        return self._read_register(109, 3)
 
     def get_charger_status(self):
         # 16-bits
         # 0=off, 1=fast, 2=fasttop, 3=floatcharge
-        return self.read_register(110)
+        return self._read_register(110)
 
     @staticmethod
     def _decode_power(x):
@@ -293,7 +307,7 @@ class CM1(minimalmodbus.Instrument):
 
     def get_wind(self):
         # all values are 16-bit signed integers with 0.1 multiplier
-        x = self.read_registers(200, 9)
+        x = self._read_registers(200, 9)
         return CM1._decode_wind(x)
 
     @staticmethod
@@ -325,7 +339,7 @@ class CM1(minimalmodbus.Instrument):
     def get_tph(self):
         # all values are 16-bit signed integers with 0.1 multiplier
         # register 225 is ignored
-        x = self.read_registers(220, 6)
+        x = self._read_registers(220, 6)
         return CM1._decode_tph(x)
 
     @staticmethod
@@ -350,7 +364,7 @@ class CM1(minimalmodbus.Instrument):
         return data
 
     def get_rain(self):
-        x = self.read_registers(242, 2)
+        x = self._read_registers(242, 2)
         return CM1._decode_rain(x)
 
     @staticmethod
@@ -362,7 +376,7 @@ class CM1(minimalmodbus.Instrument):
         return data
 
     def get_analog(self):
-        x = self.read_registers(244, 4)
+        x = self._read_registers(244, 4)
         return CM1._decode_analog(x)
 
     @staticmethod
@@ -373,8 +387,8 @@ class CM1(minimalmodbus.Instrument):
         return data
 
     def get_calculated(self):
-        x = self.read_registers(240, 2)
-        y = self.read_registers(248, 2)
+        x = self._read_registers(240, 2)
+        y = self._read_registers(248, 2)
         return CM1._decode_calculated(x+y)
 
     @staticmethod
@@ -387,7 +401,7 @@ class CM1(minimalmodbus.Instrument):
         return data
 
     def get_lightning(self):
-        x = self.read_registers(280, 12)
+        x = self._read_registers(280, 12)
         return CM1._decode_lightning(x)
 
     @staticmethod
@@ -453,20 +467,42 @@ if __name__ == '__main__':
         else:
             syslog.setlogmask(syslog.LOG_UPTO(syslog.LOG_INFO))
 
+        if True:
+            test_mmb(options.port, options.address, options.baud_rate)
+        if True:
+            test_mbtk(options.port, options.address, options.baud_rate)
+
         station = CM1(options.port, options.address, options.baud_rate)
+        station.debug = options.debug
         if options.settime:
             station.set_epoch()
             exit(0)
-
-#        print station.read_register(200, functioncode=4, signed=True)
-#        print station.read_register(200, functioncode=4, signed=False)
-#        print station.read_registers(201, 1, functioncode=4)
-
-#        print station.get_epoch()
-
         data = station.get_system_parameters()
         print "system parameters: ", data
         data = station.get_current()
         print "current values: ", data
+
+    def test_mmb(port, address, baud_rate):
+        import minimalmodbus
+        minimalmodbus.BAUDRATE = baud_rate
+        instrument = minimalmodbus.Instrument(port, address)
+        print instrument.read_register(100, 1)
+        print instrument.read_registers(100, 11)
+#        print instrument.read_register(200, functioncode=4, signed=True)
+#        print instrument.read_registers(201, 1, functioncode=4)
+
+    def test_mbtk(port, address, baud_rate):
+        import modbus_tk
+        import modbus_tk.defines as cst
+        from modbus_tk import modbus_rtu
+        import serial
+        logger = modbus_tk.utils.create_logger("console")
+        master = modbus_rtu.RtuMaster(serial.Serial(port=port, baudrate=baud_rate, bytesize=8, parity='N', stopbits=1))
+        master._verbose = True
+        print master.execute(address, cst.READ_HOLDING_REGISTERS, 100, 1)
+        print master.execute(address, cst.READ_HOLDING_REGISTERS, 100, 11)
+#        print master.execute(address, cst.READ_INPUT_REGISTERS, 100, 11)
+#        print master.execute(address, cst.READ_DISCRETE_INPUTS, 100, 1)
+#        print master.execute(address, cst.READ_COILS, 100, 1)
 
     main()
