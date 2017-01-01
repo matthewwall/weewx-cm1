@@ -468,13 +468,19 @@ if __name__ == '__main__':
             syslog.setlogmask(syslog.LOG_UPTO(syslog.LOG_INFO))
 
         if True:
-            test_mmb(options.port, options.address, options.baud_rate)
+            test_mmb(options.port, options.address, options.baud_rate,
+                     options.debug)
         if True:
-            test_mbtk(options.port, options.address, options.baud_rate)
+            test_mbtk(options.port, options.address, options.baud_rate,
+                      options.debug)
+        if False:
+            test_CM1(options.port, options.address, options.baud_rate,
+                     options.settime, options.debug)
 
-        station = CM1(options.port, options.address, options.baud_rate)
-        station.debug = options.debug
-        if options.settime:
+    def test_CM1(port, address, baud_rate, settime, debug):
+        station = CM1(port, address, baud_rate)
+        station.debug = debug
+        if settime:
             station.set_epoch()
             exit(0)
         data = station.get_system_parameters()
@@ -482,25 +488,35 @@ if __name__ == '__main__':
         data = station.get_current()
         print "current values: ", data
 
-    def test_mmb(port, address, baud_rate):
+    def test_mmb(port, address, baud_rate, debug):
+        print "\n\nminimalmodbus"
         import minimalmodbus
         minimalmodbus.BAUDRATE = baud_rate
         instrument = minimalmodbus.Instrument(port, address)
+        instrument.debug = debug
         print instrument.read_register(100, 1)
         print instrument.read_registers(100, 11)
 #        print instrument.read_register(200, functioncode=4, signed=True)
 #        print instrument.read_registers(201, 1, functioncode=4)
 
-    def test_mbtk(port, address, baud_rate):
+    def test_mbtk(port, address, baud_rate, debug):
+        print "\n\nmodbus-tk"
         import modbus_tk
         import modbus_tk.defines as cst
         from modbus_tk import modbus_rtu
         import serial
-        logger = modbus_tk.utils.create_logger("console")
-        master = modbus_rtu.RtuMaster(serial.Serial(port=port, baudrate=baud_rate, bytesize=8, parity='N', stopbits=1))
-        master._verbose = True
+        if debug:
+            logger = modbus_tk.utils.create_logger("console")
+        master = modbus_rtu.RtuMaster(
+            serial.Serial(port=port, baudrate=baud_rate,
+                          bytesize=8, parity='N', stopbits=1))
+        master.set_timeout(1.0)
+        if debug:
+            master.set_verbose(True)
         print master.execute(address, cst.READ_HOLDING_REGISTERS, 100, 1)
         print master.execute(address, cst.READ_HOLDING_REGISTERS, 100, 11)
+#        print master.execute(address, cst.READ_INPUT_REGISTERS, 100, 1)
+#        print master.execute(address, cst.READ_HOLDING_REGISTERS, 101, 1)
 #        print master.execute(address, cst.READ_INPUT_REGISTERS, 100, 11)
 #        print master.execute(address, cst.READ_DISCRETE_INPUTS, 100, 1)
 #        print master.execute(address, cst.READ_COILS, 100, 1)
