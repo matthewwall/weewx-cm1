@@ -144,14 +144,14 @@ class CM1Driver(weewx.drivers.AbstractDevice):
                 pkt['dateTime'] = int(time.time() + 0.5)
                 pkt['usUnits'] = weewx.METRICWX
                 for k in self.sensor_map:
-                    if self.sensor_map[k] in pkt:
-                        pkt[k] = pkt[self.sensor_map[k]]
-                if 'rain_day_total' in pkt:
+                    if self.sensor_map[k] in data:
+                        pkt[k] = data[self.sensor_map[k]]
+                if 'rain_day_total' in data:
                     pkt['rain'] = calculate_rain(
-                        pkt['rain_day_total'], self.last_rain)
+                        data['rain_day_total'], self.last_rain)
                     if pkt['rain'] is not None:
                         pkt['rain'] *= self.bucket_size
-                    self.last_rain = pkt['rain_day_total']
+                    self.last_rain = data['rain_day_total']
                 yield pkt
                 if self.poll_interval:
                     time.sleep(self.poll_interval)
