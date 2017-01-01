@@ -15,7 +15,7 @@ the pyserial (pure python) module.
 pip install minimalmodbus
 
 The CM1 has two communication interfaces: a USB port for configuration, and
-a RS-485 slave for reading data (Modbus-RTU over RS-485).
+a serial port for reading data (Modbus-RTU slave over RS-485).
 
 The CM1 has a data logger with capacity of 49,152 records, with logging
 intervals of 1, 2, 5, 10, 15, 20, 30, and 60 minutes.
@@ -34,6 +34,7 @@ import time
 
 import weewx
 import weewx.drivers
+from weewx.wxformulas import calculate_rain
 
 
 DRIVER_NAME = 'CM1'
@@ -68,7 +69,7 @@ class CM1ConfEditor(weewx.drivers.AbstractConfEditor):
     def default_stanza(self):
         return """
 [CM1]
-    # This section is for the Dyacon MS-1xx weather stations.
+    # This section is for Dyacon weather stations using the CM1.
 
     # Which model of weather station is this
     model = MS-120
@@ -109,6 +110,8 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         baud_rate = int(stn_dict.get('baud_rate', CM1.DEFAULT_BAUD))
         self.poll_interval = int(stn_dict.get('poll_interval', 10))
         loginf("poll interval is %s" % self.poll_interval)
+        self.bucket_size = float(stn_dict.get('bucket_size', 0.2)) # mm
+        loginf("bucket size is %s mm")
         self.sensor_map = stn_dict.get('sensor_map', CM1Driver.DEFAULT_MAP)
         loginf("sensor map: %s" % self.sensor_map)
         self.max_tries = int(stn_dict.get('max_tries', 3))
@@ -126,6 +129,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         pass
 
     def closePort(self):
+        self.station.serial.close()
         self.station = None
 
     def genLoopPackets(self):
@@ -136,13 +140,19 @@ class CM1Driver(weewx.drivers.AbstractDevice):
                 data = self.station.get_current()
                 logdbg("raw data: %s" % data)
                 ntries = 0
-                packet = dict()
-                packet['dateTime'] = int(time.time() + 0.5)
-                packet['usUnits'] = weewx.METRICWX
+                pkt = dict()
+                pkt['dateTime'] = int(time.time() + 0.5)
+                pkt['usUnits'] = weewx.METRICWX
                 for k in self.sensor_map:
                     if self.sensor_map[k] in pkt:
-                        packet[k] = pkt[self.sensor_map[k]]
-                yield packet
+                        pkt[k] = pkt[self.sensor_map[k]]
+                if 'rain_day_total' in pkt:
+                    pkt['rain'] = calculate_rain(
+                        pkt['rain_day_total'], self.last_rain)
+                    if pkt['rain'] is not None:
+                        pkt['rain'] *= self.bucket_size
+                    self.last_rain = pkt['rain_day_total']
+                yield pkt
                 if self.poll_interval:
                     time.sleep(self.poll_interval)
             except (IOError, ValueError, TypeError), e:
