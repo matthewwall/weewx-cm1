@@ -27,7 +27,6 @@ The CM1 emits the following Modbus errors:
   04 - device failure
 """
 
-import calendar
 import minimalmodbus
 import struct
 import syslog
@@ -113,14 +112,14 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         self.poll_interval = int(stn_dict.get('poll_interval', 10))
         loginf("poll interval is %s" % self.poll_interval)
         self.bucket_size = float(stn_dict.get('bucket_size', 0.2)) # mm
-        loginf("bucket size is %s mm")
+        loginf("bucket size is %s mm" % self.bucket_size)
         self.sensor_map = stn_dict.get('sensor_map', CM1Driver.DEFAULT_MAP)
         loginf("sensor map: %s" % self.sensor_map)
         self.max_tries = int(stn_dict.get('max_tries', 3))
         self.retry_wait = int(stn_dict.get('retry_wait', 2))
         self.last_rain = None
         self.station = CM1(port, address, baud_rate, timeout)
-        params = self.station.get_system_parameters()
+        params = self._get_with_retries('get_system_parameters')
         for x in CM1.SYSTEM_PARAMETERS:
             loginf("%s: %s" % (x, params[x]))
 
@@ -136,41 +135,43 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         self.station = None
 
     def genLoopPackets(self):
-        ntries = 0
-        while ntries < self.max_tries:
-            ntries += 1
-            try:
-                data = self.station.get_current()
-                logdbg("raw data: %s" % data)
-                ntries = 0
-                pkt = dict()
-                pkt['dateTime'] = int(time.time() + 0.5)
-                pkt['usUnits'] = weewx.METRICWX
-                for k in self.sensor_map:
-                    if self.sensor_map[k] in data:
-                        pkt[k] = data[self.sensor_map[k]]
-                if 'rain_day_total' in data:
-                    pkt['rain'] = calculate_rain(
-                        data['rain_day_total'], self.last_rain)
-                    if pkt['rain'] is not None:
-                        pkt['rain'] *= self.bucket_size
-                    self.last_rain = data['rain_day_total']
-                yield pkt
-                if self.poll_interval:
-                    time.sleep(self.poll_interval)
-            except (IOError, ValueError, TypeError), e:
-                loginf("failed attempt %s of %s: %s" %
-                       (ntries, self.max_tries, e))
-                time.sleep(self.retry_wait)
-        else:
-            raise WeeWxIOError("max tries %s exceeded" % self.max_tries)
+        while True:
+            data = self._get_with_retries('get_current')
+            logdbg("raw data: %s" % data)
+            pkt = dict()
+            pkt['dateTime'] = int(time.time() + 0.5)
+            pkt['usUnits'] = weewx.METRICWX
+            for k in self.sensor_map:
+                if self.sensor_map[k] in data:
+                    pkt[k] = data[self.sensor_map[k]]
+            if 'rain_day_total' in data:
+                pkt['rain'] = calculate_rain(
+                    data['rain_day_total'], self.last_rain)
+                if pkt['rain'] is not None:
+                    pkt['rain'] *= self.bucket_size
+                self.last_rain = data['rain_day_total']
+            yield pkt
+            if self.poll_interval:
+                time.sleep(self.poll_interval)
 
     def setTime(self):
         self.station.set_epoch()
 
     def getTime(self):
         return self.station.get_epoch()
-        
+
+    def _get_with_retries(self, method):
+        for n in range(self.max_tries):
+            try:
+                return getattr(self.station, method)()
+            except (IOError, ValueError, TypeError), e:
+                loginf("failed attempt %s of %s: %s" %
+                       (n + 1, self.max_tries, e))
+                time.sleep(self.retry_wait)
+        else:
+            raise weewx.WeeWxIOError("%s: max tries %s exceeded" %
+                                     (method, self.max_tries))
+
 
 class CM1(minimalmodbus.Instrument):
     DEFAULT_PORT = '/dev/ttyUSB0'
@@ -265,13 +266,13 @@ class CM1(minimalmodbus.Instrument):
         return data
 
     def get_epoch(self):
-        # station is gmtime
+        # station is localtime
         x = self._read_registers(104, 4)
         ds = (x[2] << 16) + x[3]
         ts = (x[0] << 16) + x[1]
         dt = "20%06d.%06d" % (ds, ts)
         logdbg("date.time: %s" % dt)
-        return calendar.timegm(time.strptime(dt, "%Y%m%d.%H%M%S"))
+        return time.mktime(time.strptime(dt, "%Y%m%d.%H%M%S"))
 
     def set_epoch(self, epoch=None):
         if epoch is None:
