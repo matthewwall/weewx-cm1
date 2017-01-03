@@ -133,9 +133,6 @@ class CM1Driver(weewx.drivers.AbstractDevice):
     def hardware_name(self):
         return self.model
 
-    def openPort(self):
-        pass
-
     def closePort(self):
         self.station.serial.close()
         self.station = None
