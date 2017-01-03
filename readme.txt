@@ -7,11 +7,11 @@ using the Dyacon CM-1 control module.
 ===============================================================================
 Pre-requisites
 
-- weewx
+- weewx (see weewx.com for details)
 
 sudo apt-get install weewx
 
-- the minimalmodbus python packet
+- the minimalmodbus python package
 
 sudo pip install minimalmodbus
 
