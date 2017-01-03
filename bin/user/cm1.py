@@ -29,6 +29,7 @@ The CM1 emits the following Modbus errors:
 
 import calendar
 import minimalmodbus
+import struct
 import syslog
 import time
 
@@ -107,7 +108,8 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         port = stn_dict.get('port', CM1.DEFAULT_PORT)
         address = int(stn_dict.get('address', CM1.DEFAULT_ADDRESS))
         loginf("address is %s" % address)
-        baud_rate = int(stn_dict.get('baud_rate', CM1.DEFAULT_BAUD))
+        baud_rate = int(stn_dict.get('baud_rate', CM1.DEFAULT_BAUD_RATE))
+        baud_rate = int(stn_dict.get('timeout', CM1.DEFAULT_TIMEOUT))
         self.poll_interval = int(stn_dict.get('poll_interval', 10))
         loginf("poll interval is %s" % self.poll_interval)
         self.bucket_size = float(stn_dict.get('bucket_size', 0.2)) # mm
@@ -116,7 +118,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         loginf("sensor map: %s" % self.sensor_map)
         self.max_tries = int(stn_dict.get('max_tries', 3))
         self.retry_wait = int(stn_dict.get('retry_wait', 2))
-        self.station = CM1(port, address, baud_rate)
+        self.station = CM1(port, address, baud_rate, timeout)
         params = self.station.get_system_parameters()
         for x in CM1.SYSTEM_PARAMETERS:
             loginf("%s: %s" % (x, params[x]))
@@ -173,6 +175,7 @@ class CM1(minimalmodbus.Instrument):
     DEFAULT_PORT = '/dev/ttyUSB0'
     DEFAULT_ADDRESS = 1
     DEFAULT_BAUD_RATE = 19200
+    DEFAULT_TIMEOUT = 6.0 # seconds
 
     SYSTEM_PARAMETERS = ['serial_number', 'product_id', 'firmware_version',
                          'date', 'time', 'battery_voltage', 'solar_voltage',
@@ -184,8 +187,9 @@ class CM1(minimalmodbus.Instrument):
         2: 'Fast Top', # voltage-limited
         3: 'Float Charge' } # low voltage charge
 
-    def __init__(self, port, address, baud_rate):
+    def __init__(self, port, address, baud_rate, timeout):
         minimalmodbus.BAUDRATE = baud_rate
+        minimalmodbus.TIMEOUT = timeout
         minimalmodbus.Instrument.__init__(self, port, address)
         loginf("port: %s" % self.serial.port)
         loginf("serial settings: %s:%s:%s:%s" % (
@@ -214,7 +218,7 @@ class CM1(minimalmodbus.Instrument):
 
     @staticmethod
     def _to_float(a, b):
-        return unpack('f', packe('>HH', a, b))[0]
+        return struct.unpack('f', struct.pack('>HH', a, b))[0]
 
     @staticmethod
     def _to_calculated(x):
@@ -464,6 +468,9 @@ if __name__ == '__main__':
         parser.add_option('--baud-rate', dest='baud_rate', metavar='BAUD_RATE',
                           help='modbus slave baud rate', type=int,
                           default=CM1.DEFAULT_BAUD_RATE)
+        parser.add_option('--timeout', dest='timeout', metavar='TIMEOUT',
+                          help='modbus timeout, in seconds', type=int,
+                          default=CM1.DEFAULT_TIMEOUT)
         parser.add_option('--set-time', dest='settime', action='store_true',
                           help='set station time to computer time')
         (options, _) = parser.parse_args()
@@ -477,18 +484,18 @@ if __name__ == '__main__':
         else:
             syslog.setlogmask(syslog.LOG_UPTO(syslog.LOG_INFO))
 
-        if True:
-            test_mmb(options.port, options.address, options.baud_rate,
-                     options.debug)
-        if True:
-            test_mbtk(options.port, options.address, options.baud_rate,
-                      options.debug)
         if False:
+            test_mmb(options.port, options.address, options.baud_rate,
+                     options.timeout, options.debug)
+        if False:
+            test_mbtk(options.port, options.address, options.baud_rate,
+                      options.timeout, options.debug)
+        if True:
             test_CM1(options.port, options.address, options.baud_rate,
-                     options.settime, options.debug)
+                     options.timeout, options.settime, options.debug)
 
-    def test_CM1(port, address, baud_rate, settime, debug):
-        station = CM1(port, address, baud_rate)
+    def test_CM1(port, address, baud_rate, timeout, settime, debug):
+        station = CM1(port, address, baud_rate, timeout)
         station.debug = debug
         if settime:
             station.set_epoch()
@@ -498,18 +505,19 @@ if __name__ == '__main__':
         data = station.get_current()
         print "current values: ", data
 
-    def test_mmb(port, address, baud_rate, debug):
+    def test_mmb(port, address, baud_rate, timeout, debug):
         print "\n\nminimalmodbus"
         import minimalmodbus
         minimalmodbus.BAUDRATE = baud_rate
+        minimalmodbus.TIMEOUT = timeout
         instrument = minimalmodbus.Instrument(port, address)
         instrument.debug = debug
         print instrument.read_register(100, 1)
         print instrument.read_registers(100, 11)
-#        print instrument.read_register(200, functioncode=4, signed=True)
-#        print instrument.read_registers(201, 1, functioncode=4)
+        print instrument.read_register(200, 1)
+        print instrument.read_registers(200, 92)
 
-    def test_mbtk(port, address, baud_rate, debug):
+    def test_mbtk(port, address, baud_rate, timeout, debug):
         print "\n\nmodbus-tk"
         import modbus_tk
         import modbus_tk.defines as cst
@@ -520,15 +528,12 @@ if __name__ == '__main__':
         master = modbus_rtu.RtuMaster(
             serial.Serial(port=port, baudrate=baud_rate,
                           bytesize=8, parity='N', stopbits=1))
-        master.set_timeout(1.0)
+        master.set_timeout(timeout)
         if debug:
             master.set_verbose(True)
         print master.execute(address, cst.READ_HOLDING_REGISTERS, 100, 1)
         print master.execute(address, cst.READ_HOLDING_REGISTERS, 100, 11)
-#        print master.execute(address, cst.READ_INPUT_REGISTERS, 100, 1)
-#        print master.execute(address, cst.READ_HOLDING_REGISTERS, 101, 1)
-#        print master.execute(address, cst.READ_INPUT_REGISTERS, 100, 11)
-#        print master.execute(address, cst.READ_DISCRETE_INPUTS, 100, 1)
-#        print master.execute(address, cst.READ_COILS, 100, 1)
+        print master.execute(address, cst.READ_HOLDING_REGISTERS, 200, 1)
+        print master.execute(address, cst.READ_HOLDING_REGISTERS, 200, 92)
 
     main()
