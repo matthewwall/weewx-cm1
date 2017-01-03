@@ -156,6 +156,8 @@ class CM1Driver(weewx.drivers.AbstractDevice):
                 if pkt['rain'] is not None:
                     pkt['rain'] *= self.bucket_size
                 self.last_rain = data['rain_day_total']
+            if 'rainRate' in pkt and pkt['rainRate'] is not None:
+                pkt['rainRate'] *= self.bucket_size
             yield pkt
             if self.poll_interval:
                 time.sleep(self.poll_interval)
@@ -204,8 +206,6 @@ class CM1(minimalmodbus.Instrument):
             self.serial.baudrate, self.serial.bytesize,
             self.serial.parity, self.serial.stopbits))
         self.address = address
-#        self.master = modbus_rtu.RtuMaster(
-#            serial.Serial(port=port, baudrate=baud_rate))
 
     def __enter__(self):
         return self
@@ -239,11 +239,9 @@ class CM1(minimalmodbus.Instrument):
 
     def _read_registers(self, reg, cnt):
         return self.read_registers(reg, cnt)
-#        return self.master.execute(self.address, cst.READ_HOLDING_REGISTERS, reg, cnt)
 
     def _read_register(self, reg, places=0):
         return self.read_register(reg, places)
-#        return self.master.execute(self.address, cst.READ_INPUT_REGISTERS, reg, 1)
 
     def _read_long(self, reg):
         return self.read_long(reg)
@@ -394,11 +392,11 @@ class CM1(minimalmodbus.Instrument):
         return CM1._decode_rain(x)
 
     @staticmethod
-    def _decode_rain(x, multiplier=1.0):
+    def _decode_rain(x):
         # multiplier converts to mm
         data = dict()
-        data['rain_day_total'] = x[0] * multiplier
-        data['rain_rate'] = x[1] * multiplier
+        data['rain_day_total'] = x[0]
+        data['rain_rate'] = x[1]
         return data
 
     def get_analog(self):
