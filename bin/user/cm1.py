@@ -84,6 +84,12 @@ class CM1ConfEditor(weewx.drivers.AbstractConfEditor):
     driver = user.cm1
 """
 
+    def prompt_for_settings(self):
+        print "Specify the serial port on which the station is connected, for"
+        print "example /dev/ttyUSB0 or /dev/ttyS0 or /dev/tty.usbserial"
+        port = self._prompt('port', '/dev/ttyUSB0')
+        return {'port': port}
+
 
 class CM1Driver(weewx.drivers.AbstractDevice):
     # mapping from hardware names to database schema names
