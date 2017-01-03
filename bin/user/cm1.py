@@ -58,8 +58,8 @@ def logerr(msg):
     logmsg(syslog.LOG_ERR, msg)
 
 
-def loader(config_dict, engine):
-    return CM1(**config_dict[DRIVER_NAME])
+def loader(config_dict, _):
+    return CM1Driver(**config_dict[DRIVER_NAME])
 
 def confeditor_loader():
     return CM1ConfEditor()
@@ -109,7 +109,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         address = int(stn_dict.get('address', CM1.DEFAULT_ADDRESS))
         loginf("address is %s" % address)
         baud_rate = int(stn_dict.get('baud_rate', CM1.DEFAULT_BAUD_RATE))
-        baud_rate = int(stn_dict.get('timeout', CM1.DEFAULT_TIMEOUT))
+        timeout = int(stn_dict.get('timeout', CM1.DEFAULT_TIMEOUT))
         self.poll_interval = int(stn_dict.get('poll_interval', 10))
         loginf("poll interval is %s" % self.poll_interval)
         self.bucket_size = float(stn_dict.get('bucket_size', 0.2)) # mm
@@ -118,6 +118,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         loginf("sensor map: %s" % self.sensor_map)
         self.max_tries = int(stn_dict.get('max_tries', 3))
         self.retry_wait = int(stn_dict.get('retry_wait', 2))
+        self.last_rain = None
         self.station = CM1(port, address, baud_rate, timeout)
         params = self.station.get_system_parameters()
         for x in CM1.SYSTEM_PARAMETERS:
