@@ -155,10 +155,10 @@ class CM1Driver(weewx.drivers.AbstractDevice):
                 time.sleep(self.poll_interval)
 
     def setTime(self):
-        self.station.set_epoch()
+        self.station.set_clock()
 
     def getTime(self):
-        return self.station.get_epoch()
+        return self.station.get_clock()
 
     def _get_with_retries(self, method):
         for n in range(self.max_tries):
@@ -265,19 +265,19 @@ class CM1(minimalmodbus.Instrument):
         data.update(CM1._decode_lightning(x[80:92]))
         return data
 
-    def get_epoch(self):
-        # station is localtime
+    def get_clock(self):
         x = self._read_registers(104, 4)
         ds = (x[2] << 16) + x[3]
         ts = (x[0] << 16) + x[1]
-        dt = "20%06d.%06d" % (ds, ts)
-        logdbg("date.time: %s" % dt)
-        return time.mktime(time.strptime(dt, "%Y%m%d.%H%M%S"))
+        x = time.mktime(time.strptime("20%06d.%06d" % (ds, ts),
+                                      "%Y%m%d.%H%M%S"))
+        loginf("get_clock: date.time: %s.%s (%s)" % (ds, ts, x))
+        return x
 
-    def set_epoch(self, epoch=None):
+    def set_clock(self, epoch=None):
         if epoch is None:
             epoch = int(time.time() + 0.5)
-        tstr = time.gmtime(epoch)
+        tstr = time.localtime(epoch)
         ds = (tstr.tm_year - 2000) * 10000 + tstr.tm_mon * 100 + tstr.tm_mday
         dlo = ds % 0x10000
         dhi = (ds - dlo) >> 16
@@ -285,7 +285,7 @@ class CM1(minimalmodbus.Instrument):
         tlo = ts % 0x10000
         thi = (ts - tlo) >> 16
         buf = [thi, tlo, dhi, dlo]
-        logdbg("set_epoch: date.time: %s.%s (%s)" % (ds, ts, buf))
+        loginf("set_clock: date.time: %06d.%06d (%s)" % (ds, ts, epoch))
         self.write_registers(104, buf)
 
     def get_time(self):
@@ -473,6 +473,8 @@ if __name__ == '__main__':
         parser.add_option('--timeout', dest='timeout', metavar='TIMEOUT',
                           help='modbus timeout, in seconds', type=int,
                           default=CM1.DEFAULT_TIMEOUT)
+        parser.add_option('--get-time', dest='gettime', action='store_true',
+                          help='get station time')
         parser.add_option('--set-time', dest='settime', action='store_true',
                           help='set station time to computer time')
         (options, _) = parser.parse_args()
@@ -494,13 +496,23 @@ if __name__ == '__main__':
                       options.timeout, options.debug)
         if True:
             test_CM1(options.port, options.address, options.baud_rate,
-                     options.timeout, options.settime, options.debug)
+                     options.timeout, options.debug,
+                     options.gettime, options.settime)
 
-    def test_CM1(port, address, baud_rate, timeout, settime, debug):
+    def test_CM1(port, address, baud_rate, timeout, debug, gettime, settime):
         station = CM1(port, address, baud_rate, timeout)
         station.debug = debug
+        if gettime:
+            print "epoch:", station.get_clock()
+            print "date:", station.get_date()
+            print "time:", station.get_time()
+            exit(0)
         if settime:
-            station.set_epoch()
+            print "epoch before:", station.get_clock()
+            station.set_clock()
+            print "epoch after:", station.get_clock()
+            print "date:", station.get_date()
+            print "time:", station.get_time()
             exit(0)
         data = station.get_system_parameters()
         print "system parameters: ", data
