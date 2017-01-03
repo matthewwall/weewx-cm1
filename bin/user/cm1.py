@@ -116,7 +116,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         self.sensor_map = stn_dict.get('sensor_map', CM1Driver.DEFAULT_MAP)
         loginf("sensor map: %s" % self.sensor_map)
         self.max_tries = int(stn_dict.get('max_tries', 3))
-        self.retry_wait = int(stn_dict.get('retry_wait', 2))
+        self.retry_wait = int(stn_dict.get('retry_wait', 5))
         self.last_rain = None
         self.station = CM1(port, address, baud_rate, timeout)
         params = self._get_with_retries('get_system_parameters')
@@ -137,7 +137,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
     def genLoopPackets(self):
         while True:
             data = self._get_with_retries('get_current')
-            logdbg("raw data: %s" % data)
+            loginf("raw data: %s" % data)
             pkt = dict()
             pkt['dateTime'] = int(time.time() + 0.5)
             pkt['usUnits'] = weewx.METRICWX
@@ -220,11 +220,14 @@ class CM1(minimalmodbus.Instrument):
 
     @staticmethod
     def _to_float(a, b):
-        return struct.unpack('f', struct.pack('>HH', a, b))[0]
+        f = struct.unpack('f', struct.pack('>HH', a, b))[0]
+#        loginf("to_float: a=%04x b=%04x f=%s" % (a, b, f))
+        return f
 
     @staticmethod
     def _to_calculated(x):
-        if x == -999:
+        x = CM1._to_signed(x)
+        if x == -9990:
             return None
         return x * 0.1
 
@@ -271,7 +274,7 @@ class CM1(minimalmodbus.Instrument):
         ts = (x[0] << 16) + x[1]
         x = time.mktime(time.strptime("20%06d.%06d" % (ds, ts),
                                       "%Y%m%d.%H%M%S"))
-        loginf("get_clock: date.time: %s.%s (%s)" % (ds, ts, x))
+        logdbg("get_clock: date.time: %s.%s (%s)" % (ds, ts, x))
         return x
 
     def set_clock(self, epoch=None):
@@ -285,7 +288,7 @@ class CM1(minimalmodbus.Instrument):
         tlo = ts % 0x10000
         thi = (ts - tlo) >> 16
         buf = [thi, tlo, dhi, dlo]
-        loginf("set_clock: date.time: %06d.%06d (%s)" % (ds, ts, epoch))
+        logdbg("set_clock: date.time: %06d.%06d (%s)" % (ds, ts, epoch))
         self.write_registers(104, buf)
 
     def get_time(self):
@@ -354,7 +357,6 @@ class CM1(minimalmodbus.Instrument):
 
     def get_tph(self):
         # all values are 16-bit signed integers with 0.1 multiplier
-        # register 225 is ignored
         x = self._read_registers(220, 6)
         return CM1._decode_tph(x)
 
@@ -374,9 +376,11 @@ class CM1(minimalmodbus.Instrument):
             if data['tph_status'] & 0x02 == 0x02:
                 data['pressure'] = None
                 data['pressure_trend'] = None
+                data['temperature_p'] = None
             else:
                 data['pressure'] = x[3] * 0.1
                 data['pressure_trend'] = x[4]
+                data['temperature_p'] = x[5] * 0.1
         return data
 
     def get_rain(self):
