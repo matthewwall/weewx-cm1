@@ -140,7 +140,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
     def genLoopPackets(self):
         while True:
             data = self._get_with_retries('get_current')
-            loginf("raw data: %s" % data)
+            logdbg("raw data: %s" % data)
             pkt = dict()
             pkt['dateTime'] = int(time.time() + 0.5)
             pkt['usUnits'] = weewx.METRICWX
