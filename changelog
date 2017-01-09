@@ -1,2 +1,6 @@
+0.2 08jan2017
+* verified that the driver works while running on windows
+* provide more log feedback
+
 0.1 30dec2016
 * initial release

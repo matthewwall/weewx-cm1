@@ -9,7 +9,7 @@ def loader():
 class CM1Installer(ExtensionInstaller):
     def __init__(self):
         super(CM1Installer, self).__init__(
-            version="0.1",
+            version="0.2",
             name='cm1',
             description='Collect data from Dyacon weather station using CM1',
             author="Matthew Wall",
