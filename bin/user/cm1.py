@@ -111,7 +111,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         self.model = stn_dict.get('model', 'MS-120')
         loginf("model is %s" % self.model)
         port = stn_dict.get('port', CM1.DEFAULT_PORT)
-        loginf("port is %s" % self.port)
+        loginf("port is %s" % port)
         address = int(stn_dict.get('address', CM1.DEFAULT_ADDRESS))
         loginf("address is %s" % address)
         baud_rate = int(stn_dict.get('baud_rate', CM1.DEFAULT_BAUD_RATE))
