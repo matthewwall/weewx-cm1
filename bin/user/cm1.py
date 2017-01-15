@@ -271,6 +271,7 @@ class CM1(minimalmodbus.Instrument):
         return data
 
     def get_clock(self):
+        # station is in local time, so convert from local time to epoch
         x = self._read_registers(104, 4)
         ds = (x[2] << 16) + x[3]
         ts = (x[0] << 16) + x[1]
@@ -280,6 +281,7 @@ class CM1(minimalmodbus.Instrument):
         return x
 
     def set_clock(self, epoch=None):
+        # station is in local time, so convert from epoch to local time
         if epoch is None:
             epoch = int(time.time() + 0.5)
         tstr = time.localtime(epoch)
