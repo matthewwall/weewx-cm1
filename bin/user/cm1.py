@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Copyright 2016 Matthew Wall, all rights reserved
+# Copyright 2016 Matthew Wall
+# Distributed under the terms of the GNU Public License (GPLv3)
 
 """Driver for collecting data from Dyacon weather station using the CM1
 weather tation control module.
