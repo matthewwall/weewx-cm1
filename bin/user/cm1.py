@@ -109,6 +109,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         'wetbulb': 'wetbulb'}
 
     def __init__(self, **stn_dict):
+        loginf('driver version is %s' % DRIVER_VERSION)
         self.model = stn_dict.get('model', 'MS-120')
         loginf("model is %s" % self.model)
         port = stn_dict.get('port', CM1.DEFAULT_PORT)
