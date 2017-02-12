@@ -1,5 +1,6 @@
 # installer for dyacon cm1 driver
 # Copyright 2016 Matthew Wall
+# Distributed under the terms of the GNU Public License (GPLv3)
 
 from setup import ExtensionInstaller
 
@@ -9,7 +10,7 @@ def loader():
 class CM1Installer(ExtensionInstaller):
     def __init__(self):
         super(CM1Installer, self).__init__(
-            version="0.2",
+            version="0.3",
             name='cm1',
             description='Collect data from Dyacon weather station using CM1',
             author="Matthew Wall",

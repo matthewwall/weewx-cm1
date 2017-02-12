@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Copyright 2016 Matthew Wall, all rights reserved
+# Copyright 2016 Matthew Wall
+# Distributed under the terms of the GNU Public License (GPLv3)
 
 """Driver for collecting data from Dyacon weather station using the CM1
 weather tation control module.
@@ -38,7 +39,7 @@ from weewx.wxformulas import calculate_rain
 
 
 DRIVER_NAME = 'CM1'
-DRIVER_VERSION = '0.2'
+DRIVER_VERSION = '0.3'
 
 
 def logmsg(dst, msg):
@@ -108,6 +109,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         'wetbulb': 'wetbulb'}
 
     def __init__(self, **stn_dict):
+        loginf('driver version is %s' % DRIVER_VERSION)
         self.model = stn_dict.get('model', 'MS-120')
         loginf("model is %s" % self.model)
         port = stn_dict.get('port', CM1.DEFAULT_PORT)
@@ -120,7 +122,9 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         loginf("poll interval is %s" % self.poll_interval)
         self.bucket_size = float(stn_dict.get('bucket_size', 0.2)) # mm
         loginf("bucket size is %s mm" % self.bucket_size)
-        self.sensor_map = stn_dict.get('sensor_map', CM1Driver.DEFAULT_MAP)
+        self.sensor_map = dict(CM1Driver.DEFAULT_MAP)
+        if 'sensor_map' in stn_dict:
+            self.sensor_map.update(stn_dict['sensor_map'])
         loginf("sensor map: %s" % self.sensor_map)
         self.max_tries = int(stn_dict.get('max_tries', 3))
         self.retry_wait = int(stn_dict.get('retry_wait', 5))

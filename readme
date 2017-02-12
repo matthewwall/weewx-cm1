@@ -1,4 +1,6 @@
 weewx-cm1
+Copyright 2016 Matthew Wall
+Distributed under terms of the GPLv3
 
 This is a driver for weewx that collects data from Dyacon weather stations
 using the Dyacon CM-1 control module.
