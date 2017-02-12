@@ -160,11 +160,11 @@ class CM1Driver(weewx.drivers.AbstractDevice):
             if self.poll_interval:
                 time.sleep(self.poll_interval)
 
-    def setTime(self):
-        self.station.set_clock()
+#    def setTime(self):
+#        self.station.set_clock()
 
-    def getTime(self):
-        return self.station.get_clock()
+#    def getTime(self):
+#        return self.station.get_clock()
 
     def _get_with_retries(self, method):
         for n in range(self.max_tries):
