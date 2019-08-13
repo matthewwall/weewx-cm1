@@ -1,3 +1,9 @@
+0.4 13aug2019
+* added lightning to default sensor map
+* added sensor status to default sensor map
+* added analog inputs to default sensor map
+* do not close port on shutdown
+
 0.3 22jan2017
 * user-specified map augments the default instead of replacing it
 
