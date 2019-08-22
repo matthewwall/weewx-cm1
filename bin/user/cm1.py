@@ -39,7 +39,7 @@ from weewx.wxformulas import calculate_rain
 
 
 DRIVER_NAME = 'CM1'
-DRIVER_VERSION = '0.4'
+DRIVER_VERSION = '0.5'
 
 
 def logmsg(dst, msg):

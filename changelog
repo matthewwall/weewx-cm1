@@ -1,3 +1,6 @@
+0.5 22aug2019
+* fixed analog sensor readings
+
 0.4 13aug2019
 * added lightning to default sensor map
 * added sensor status to default sensor map
