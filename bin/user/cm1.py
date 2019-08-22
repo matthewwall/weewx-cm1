@@ -285,7 +285,8 @@ class CM1(minimalmodbus.Instrument):
         data.update(CM1._decode_wind(x[0:9]))
         data.update(CM1._decode_tph(x[20:26]))
         data.update(CM1._decode_rain(x[42:44]))
-        data.update(CM1._decode_analog(x[44:48]))
+        data.update(CM1._decode_analog(x[44:46], 1))
+        data.update(CM1._decode_analog(x[46:48], 2))
         data.update(CM1._decode_calculated(x[40:42]+x[48:50]))
         data.update(CM1._decode_lightning(x[80:92]))
         return data
@@ -419,15 +420,18 @@ class CM1(minimalmodbus.Instrument):
         data['rain_rate'] = x[1]
         return data
 
-    def get_analog(self):
-        x = self._read_registers(244, 4)
-        return CM1._decode_analog(x)
+    def get_analog_1(self):
+        x = self._read_registers(244, 2)
+        return CM1._decode_analog(x, 1)
+
+    def get_analog_2(self):
+        x = self._read_registers(246, 2)
+        return CM1._decode_analog(x, 2)
 
     @staticmethod
-    def _decode_analog(x):
+    def _decode_analog(x, label=1):
         data = dict()
-        data['analog_1'] = CM1._to_float(x[0], x[1])
-        data['analog_2'] = CM1._to_float(x[0], x[1])
+        data['analog_%s' % label] = CM1._to_float(x[0], x[1])
         return data
 
     def get_calculated(self):
