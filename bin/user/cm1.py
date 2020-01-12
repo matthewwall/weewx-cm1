@@ -39,7 +39,7 @@ from weewx.wxformulas import calculate_rain
 
 
 DRIVER_NAME = 'CM1'
-DRIVER_VERSION = '0.3'
+DRIVER_VERSION = '0.5'
 
 
 def logmsg(dst, msg):
@@ -106,7 +106,21 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         'heatindex': 'heatindex',
         'windchill': 'windchill',
         'dewpoint': 'dewpoint',
-        'wetbulb': 'wetbulb'}
+        'wetbulb': 'wetbulb',
+        'extraTemp1': 'analog_1',
+        'extraTemp2': 'analog_2',
+        'lightning_disturber_count': 'lightning_disturber_count',
+        'lightning_strike_count': 'lightning_strike_count',
+        'lightning_noise_count': 'lightning_noise_count',
+        'lightning_distance': 'lightning_distance',
+        'lightning_energy': 'lightning_energy',
+        'solar_voltage': 'solar_voltage',
+        'battery_voltage': 'battery_voltage',
+        'charger_status': 'charger_status',
+        'tph_status': 'tph_status',
+        'lightning_status': 'lightning_status',
+        'wind_status': 'wind_status',
+    }
 
     def __init__(self, **stn_dict):
         loginf('driver version is %s' % DRIVER_VERSION)
@@ -126,7 +140,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         if 'sensor_map' in stn_dict:
             self.sensor_map.update(stn_dict['sensor_map'])
         loginf("sensor map: %s" % self.sensor_map)
-        self.max_tries = int(stn_dict.get('max_tries', 3))
+        self.max_tries = int(stn_dict.get('max_tries', 6))
         self.retry_wait = int(stn_dict.get('retry_wait', 5))
         self.last_rain = None
         self.station = CM1(port, address, baud_rate, timeout)
@@ -139,7 +153,7 @@ class CM1Driver(weewx.drivers.AbstractDevice):
         return self.model
 
     def closePort(self):
-        self.station.serial.close()
+#        self.station.serial.close()
         self.station = None
 
     def genLoopPackets(self):
@@ -164,11 +178,11 @@ class CM1Driver(weewx.drivers.AbstractDevice):
             if self.poll_interval:
                 time.sleep(self.poll_interval)
 
-    def setTime(self):
-        self.station.set_clock()
+#    def setTime(self):
+#        self.station.set_clock()
 
-    def getTime(self):
-        return self.station.get_clock()
+#    def getTime(self):
+#        return self.station.get_clock()
 
     def _get_with_retries(self, method):
         for n in range(self.max_tries):
@@ -200,14 +214,16 @@ class CM1(minimalmodbus.Instrument):
         3: 'Float Charge' } # low voltage charge
 
     def __init__(self, port, address, baud_rate, timeout):
-        minimalmodbus.BAUDRATE = baud_rate
-        minimalmodbus.TIMEOUT = timeout
+#        minimalmodbus.BAUDRATE = baud_rate
+#        minimalmodbus.TIMEOUT = timeout
         minimalmodbus.Instrument.__init__(self, port, address)
+        self.serial.baudrate = baud_rate
+        self.serial.timeout = timeout
         loginf("port: %s" % self.serial.port)
         loginf("serial settings: %s:%s:%s:%s" % (
             self.serial.baudrate, self.serial.bytesize,
             self.serial.parity, self.serial.stopbits))
-        self.address = address
+#        self.address = address
 
     def __enter__(self):
         return self
@@ -269,7 +285,8 @@ class CM1(minimalmodbus.Instrument):
         data.update(CM1._decode_wind(x[0:9]))
         data.update(CM1._decode_tph(x[20:26]))
         data.update(CM1._decode_rain(x[42:44]))
-        data.update(CM1._decode_analog(x[44:48]))
+        data.update(CM1._decode_analog(x[44:46], 1))
+        data.update(CM1._decode_analog(x[46:48], 2))
         data.update(CM1._decode_calculated(x[40:42]+x[48:50]))
         data.update(CM1._decode_lightning(x[80:92]))
         return data
@@ -403,15 +420,18 @@ class CM1(minimalmodbus.Instrument):
         data['rain_rate'] = x[1]
         return data
 
-    def get_analog(self):
-        x = self._read_registers(244, 4)
-        return CM1._decode_analog(x)
+    def get_analog_1(self):
+        x = self._read_registers(244, 2)
+        return CM1._decode_analog(x, 1)
+
+    def get_analog_2(self):
+        x = self._read_registers(246, 2)
+        return CM1._decode_analog(x, 2)
 
     @staticmethod
-    def _decode_analog(x):
+    def _decode_analog(x, label=1):
         data = dict()
-        data['analog_1'] = CM1._to_float(x[0], x[1])
-        data['analog_2'] = CM1._to_float(x[0], x[1])
+        data['analog_%s' % label] = CM1._to_float(x[0], x[1])
         return data
 
     def get_calculated(self):
@@ -534,9 +554,9 @@ if __name__ == '__main__':
     def test_mmb(port, address, baud_rate, timeout, debug):
         print "\n\nminimalmodbus"
         import minimalmodbus
-        minimalmodbus.BAUDRATE = baud_rate
-        minimalmodbus.TIMEOUT = timeout
         instrument = minimalmodbus.Instrument(port, address)
+        instrument.serial.baudrate = baud_rate
+        instrument.serial.timeout = timeout
         instrument.debug = debug
         print instrument.read_register(100, 1)
         print instrument.read_registers(100, 11)
